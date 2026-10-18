@@ -1,0 +1,351 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>三点检验法显著性判断工具</title>
+    <!-- 引入 TailwindCSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- 引入 Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+        }
+        .card-shadow {
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .result-enter {
+            animation: slideUp 0.5s ease-out forwards;
+        }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #888; 
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center p-4">
+
+    <div class="w-full max-w-md bg-white rounded-2xl card-shadow overflow-hidden">
+        <!-- 头部导航 -->
+        <div class="bg-blue-600 p-6 text-white relative overflow-hidden">
+            <div class="absolute top-0 right-0 opacity-10 transform translate-x-4 -translate-y-4">
+                <i class="fas fa-flask text-9xl"></i>
+            </div>
+            <h1 class="text-2xl font-bold mb-1">三点检验法计算器</h1>
+            <p class="text-blue-100 text-sm">食品感官分析 · 显著性快速判断</p>
+        </div>
+
+        <!-- 主功能区域 -->
+        <div class="p-6 space-y-6">
+            
+            <!-- 输入表单 -->
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-gray-700 text-sm font-bold mb-2" for="totalPanelists">
+                        <i class="fas fa-users mr-2 text-blue-500"></i>评价员总人数 (n)
+                    </label>
+                    <input type="number" id="totalPanelists" min="6" placeholder="例如：30" 
+                        class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200"
+                        oninput="validateInput()">
+                    <p class="text-xs text-gray-500 mt-1">* 建议人数 ≥ 6，通常推荐 20-30 人</p>
+                </div>
+
+                <div>
+                    <label class="block text-gray-700 text-sm font-bold mb-2" for="correctAnswers">
+                        <i class="fas fa-check-circle mr-2 text-green-500"></i>正确回答人数 (k)
+                    </label>
+                    <input type="number" id="correctAnswers" min="0" placeholder="例如：18" 
+                        class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200"
+                        oninput="validateInput()">
+                    <p class="text-xs text-gray-500 mt-1">* 必须小于或等于总人数</p>
+                </div>
+
+                <div>
+                    <label class="block text-gray-700 text-sm font-bold mb-2">
+                        <i class="fas fa-percentage mr-2 text-purple-500"></i>显著性水平 (α)
+                    </label>
+                    <div class="flex space-x-4">
+                        <label class="inline-flex items-center">
+                            <input type="radio" class="form-radio text-blue-600" name="alphaLevel" value="0.05" checked>
+                            <span class="ml-2 text-gray-700">0.05 (常用)</span>
+                        </label>
+                        <label class="inline-flex items-center">
+                            <input type="radio" class="form-radio text-blue-600" name="alphaLevel" value="0.01">
+                            <span class="ml-2 text-gray-700">0.01 (严格)</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 操作按钮 -->
+            <button onclick="calculateResult()" 
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg transform transition hover:-translate-y-1 active:translate-y-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                <i class="fas fa-calculator mr-2"></i>立即判断
+            </button>
+
+            <!-- 结果展示区域 (默认隐藏) -->
+            <div id="resultArea" class="hidden mt-6 pt-6 border-t border-gray-200">
+                <div class="bg-gray-50 rounded-xl p-4 result-enter">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-bold text-gray-800">判断结果</h3>
+                        <span id="significanceBadge" class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide">
+                            --
+                        </span>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div class="text-center p-3 bg-white rounded-lg shadow-sm">
+                            <p class="text-xs text-gray-500">临界值 (K)</p>
+                            <p id="criticalValue" class="text-xl font-bold text-gray-800">--</p>
+                        </div>
+                        <div class="text-center p-3 bg-white rounded-lg shadow-sm">
+                            <p class="text-xs text-gray-500">正确率</p>
+                            <p id="accuracyRate" class="text-xl font-bold text-blue-600">--%</p>
+                        </div>
+                    </div>
+
+                    <div id="conclusionText" class="text-sm text-gray-700 leading-relaxed bg-white p-3 rounded-lg border-l-4 border-blue-500">
+                        <!-- 结论文本将在这里动态生成 -->
+                    </div>
+                </div>
+
+                <!-- 图表展示 -->
+                <div class="mt-4 h-48 w-full">
+                    <canvas id="resultChart"></canvas>
+                </div>
+            </div>
+
+            <!-- 错误提示 -->
+            <div id="errorToast" class="hidden fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-6 py-3 rounded-full shadow-lg text-sm z-50">
+                <i class="fas fa-exclamation-circle mr-2"></i><span id="errorMsg">错误信息</span>
+            </div>
+        </div>
+
+        <!-- 页脚 -->
+        <div class="bg-gray-50 p-4 text-center text-xs text-gray-500 border-t border-gray-200">
+            <p>依据 GB/T 12311-2012 《感官分析 三点检验》</p>
+            <p class="mt-1">教创赛专用 · 食品感官分析课程</p>
+        </div>
+    </div>
+
+    <script>
+        // 三点检验法临界值表 (部分常用数据，基于二项分布累积概率)
+        // 格式: { n: { '0.05': k_05, '0.01': k_01 } }
+        // 注意：这里只列出 n=6 到 n=100 的部分关键值，实际应用中应包含完整表格或使用统计库计算
+        // 为简化演示，这里使用预计算的临界值表
+        const criticalValuesTable = {
+            6: { '0.05': 6, '0.01': 6 },
+            7: { '0.05': 6, '0.01': 7 },
+            8: { '0.05': 7, '0.01': 8 },
+            9: { '0.05': 7, '0.01': 8 },
+            10: { '0.05': 8, '0.01': 9 },
+            11: { '0.05': 8, '0.01': 9 },
+            12: { '0.05': 9, '0.01': 10 },
+            13: { '0.05': 9, '0.01': 10 },
+            14: { '0.05': 10, '0.01': 11 },
+            15: { '0.05': 10, '0.01': 11 },
+            16: { '0.05': 11, '0.01': 12 },
+            17: { '0.05': 11, '0.01': 12 },
+            18: { '0.05': 12, '0.01': 13 },
+            19: { '0.05': 12, '0.01': 13 },
+            20: { '0.05': 13, '0.01': 14 },
+            21: { '0.05': 13, '0.01': 14 },
+            22: { '0.05': 14, '0.01': 15 },
+            23: { '0.05': 14, '0.01': 15 },
+            24: { '0.05': 15, '0.01': 16 },
+            25: { '0.05': 15, '0.01': 16 },
+            26: { '0.05': 16, '0.01': 17 },
+            27: { '0.05': 16, '0.01': 17 },
+            28: { '0.05': 17, '0.01': 18 },
+            29: { '0.05': 17, '0.01': 18 },
+            30: { '0.05': 18, '0.01': 19 },
+            31: { '0.05': 18, '0.01': 19 },
+            32: { '0.05': 19, '0.01': 20 },
+            33: { '0.05': 19, '0.01': 20 },
+            34: { '0.05': 20, '0.01': 21 },
+            35: { '0.05': 20, '0.01': 21 },
+            36: { '0.05': 21, '0.01': 22 },
+            37: { '0.05': 21, '0.01': 22 },
+            38: { '0.05': 22, '0.01': 23 },
+            39: { '0.05': 22, '0.01': 23 },
+            40: { '0.05': 23, '0.01': 24 },
+            50: { '0.05': 27, '0.01': 29 },
+            60: { '0.05': 32, '0.01': 34 },
+            70: { '0.05': 37, '0.01': 39 },
+            80: { '0.05': 42, '0.01': 44 },
+            90: { '0.05': 47, '0.01': 49 },
+            100: { '0.05': 52, '0.01': 54 }
+        };
+
+        // 辅助函数：获取最接近的临界值（如果表中没有精确匹配，使用线性插值或查找最近值，这里简化为查找最近的关键点）
+        function getCriticalValue(n, alpha) {
+            if (criticalValuesTable[n]) {
+                return criticalValuesTable[n][alpha];
+            }
+            // 如果不在表中，寻找最近的较小值作为保守估计，或使用公式近似
+            // 这里为了演示简单，如果超过100，使用近似公式或返回null提示
+            if (n > 100) {
+                // 正态近似公式: K = n/3 + Z_alpha * sqrt(2n/9)
+                const z = alpha === 0.05 ? 1.645 : 2.326; // 单侧检验
+                const mean = n / 3;
+                const std = Math.sqrt(2 * n / 9);
+                return Math.ceil(mean + z * std);
+            }
+            // 简单的向下取整查找逻辑，实际生产环境应使用完整统计表
+            let closestN = Object.keys(criticalValuesTable).map(Number).filter(key => key <= n).sort((a,b) => b-a)[0];
+            if(closestN) {
+                 return criticalValuesTable[closestN][alpha];
+            }
+            return null;
+        }
+
+        let myChart = null;
+
+        function validateInput() {
+            // 简单的实时验证逻辑，可选
+        }
+
+        function showError(msg) {
+            const toast = document.getElementById('errorToast');
+            document.getElementById('errorMsg').innerText = msg;
+            toast.classList.remove('hidden');
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 3000);
+        }
+
+        function calculateResult() {
+            const nInput = document.getElementById('totalPanelists');
+            const kInput = document.getElementById('correctAnswers');
+            const alphaRadio = document.querySelector('input[name="alphaLevel"]:checked');
+
+            const n = parseInt(nInput.value);
+            const k = parseInt(kInput.value);
+            const alpha = alphaRadio.value;
+
+            // 验证输入
+            if (!n || !k) {
+                showError("请输入完整的评价员人数和正确回答人数");
+                return;
+            }
+            if (n < 6) {
+                showError("评价员人数过少，统计结果不可靠 (建议 n ≥ 6)");
+                return;
+            }
+            if (k > n) {
+                showError("正确人数不能大于总人数");
+                return;
+            }
+
+            // 获取临界值
+            const criticalK = getCriticalValue(n, alpha);
+            
+            if (criticalK === null) {
+                showError("无法计算临界值，请检查人数范围");
+                return;
+            }
+
+            // 判断显著性
+            const isSignificant = k >= criticalK;
+            const accuracy = ((k / n) * 100).toFixed(1);
+
+            // 更新UI
+            const resultArea = document.getElementById('resultArea');
+            const badge = document.getElementById('significanceBadge');
+            const critValEl = document.getElementById('criticalValue');
+            const accEl = document.getElementById('accuracyRate');
+            const conclusionEl = document.getElementById('conclusionText');
+
+            resultArea.classList.remove('hidden');
+            
+            // 设置徽章样式
+            if (isSignificant) {
+                badge.className = "px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide bg-green-100 text-green-800";
+                badge.innerText = "存在显著差异";
+                conclusionEl.className = "text-sm text-gray-700 leading-relaxed bg-white p-3 rounded-lg border-l-4 border-green-500";
+                conclusionEl.innerHTML = `<strong>结论：</strong>在 α=${alpha} 水平下，正确回答人数 (${k}) ≥ 临界值 (${criticalK})。<br>拒绝原假设，认为两个样品之间存在显著的感官差异。`;
+            } else {
+                badge.className = "px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide bg-gray-100 text-gray-600";
+                badge.innerText = "无显著差异";
+                conclusionEl.className = "text-sm text-gray-700 leading-relaxed bg-white p-3 rounded-lg border-l-4 border-gray-400";
+                conclusionEl.innerHTML = `<strong>结论：</strong>在 α=${alpha} 水平下，正确回答人数 (${k}) < 临界值 (${criticalK})。<br>接受原假设，认为两个样品之间没有显著的感官差异。`;
+            }
+
+            critValEl.innerText = criticalK;
+            accEl.innerText = accuracy + "%";
+
+            // 绘制图表
+            renderChart(n, k, criticalK, isSignificant);
+        }
+
+        function renderChart(n, k, criticalK, isSignificant) {
+            const ctx = document.getElementById('resultChart').getContext('2d');
+            
+            if (myChart) {
+                myChart.destroy();
+            }
+
+            const correctColor = isSignificant ? 'rgba(34, 197, 94, 0.7)' : 'rgba(156, 163, 175, 0.7)';
+            const wrongColor = 'rgba(239, 68, 68, 0.7)';
+            const borderColor = isSignificant ? 'rgba(34, 197, 94, 1)' : 'rgba(156, 163, 175, 1)';
+
+            myChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['正确回答', '错误回答'],
+                    datasets: [{
+                        label: '人数分布',
+                        data: [k, n - k],
+                        backgroundColor: [correctColor, wrongColor],
+                        borderColor: [borderColor, 'rgba(239, 68, 68, 1)'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `人数: ${context.raw}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: n,
+                            title: {
+                                display: true,
+                                text: '人数'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
